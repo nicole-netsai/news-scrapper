@@ -1,9 +1,5 @@
 import streamlit as st
 import pandas as pd
-pip install scikit-learn
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.cluster import KMeans
-from sklearn.decomposition import PCA
 import plotly.express as px
 import numpy as np
 from datetime import datetime
