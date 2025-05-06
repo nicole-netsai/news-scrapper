@@ -1,11 +1,4 @@
-import streamlit as st
-import pandas as pd
-import plotly.express as px
-import numpy as np
-from datetime import datetime
-import scrapy
-from scrapy.crawler import CrawlerProcess
-import csv
+
 
 # NewsSpider class from the provided code (modified to return data)
 class NewsSpider(scrapy.Spider):
