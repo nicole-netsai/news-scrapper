@@ -1,4 +1,14 @@
-
+import streamlit as st
+import pandas as pd
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.cluster import KMeans
+from sklearn.decomposition import PCA
+import plotly.express as px
+import numpy as np
+from datetime import datetime
+import scrapy
+from scrapy.crawler import CrawlerProcess
+import csv
 
 # NewsSpider class from the provided code (modified to return data)
 class NewsSpider(scrapy.Spider):
