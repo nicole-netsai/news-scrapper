@@ -1,208 +1,215 @@
 import streamlit as st
 import pandas as pd
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.cluster import KMeans
-from sklearn.decomposition import PCA
-import plotly.express as px
 import numpy as np
+import matplotlib.pyplot as plt
+import tensorflow as tf
+from tensorflow.keras.preprocessing import image
+from tensorflow.keras.models import load_model
+import os
 from datetime import datetime
-import scrapy
-from scrapy.crawler import CrawlerProcess
-import csv
+import time
+import random
 
-# NewsSpider class from the provided code (modified to return data)
-class NewsSpider(scrapy.Spider):
-    name = 'news_spider'
-    
-    custom_settings = {
-        'CONCURRENT_REQUESTS': 1,
-        'DOWNLOAD_DELAY': 2,
-        'USER_AGENT': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'FEED_FORMAT': 'csv',
-        'FEED_URI': 'news_articles.csv'
-    }
+# Load the pre-trained model (would need to be saved from the notebook)
+# model = load_model('parking_classifier.h5')
 
-    def start_requests(self):
-        newspapers = {
-            'BBC': {
-                'Business': 'https://www.bbc.com/news/business',
-                'Politics': 'https://www.bbc.com/news/politics',
-                'Arts': 'https://www.bbc.com/news/entertainment_and_arts',
-                'Sports': 'https://www.bbc.com/sport'
-            },
-            'CNN': {
-                'Business': 'https://www.cnn.com/business',
-                'Politics': 'https://www.cnn.com/politics',
-                'Arts': 'https://www.cnn.com/entertainment',
-                'Sports': 'https://www.cnn.com/sport'
-            },
-            'Reuters': {
-                'Business': 'https://www.reuters.com/business/',
-                'Politics': 'https://www.reuters.com/politics/',
-                'Arts': 'https://www.reuters.com/lifestyle/',
-                'Sports': 'https://www.reuters.com/sports/'
-            },
-            'Guardian': {
-                'Business': 'https://www.theguardian.com/uk/business',
-                'Politics': 'https://www.theguardian.com/politics',
-                'Arts': 'https://www.theguardian.com/uk/culture',
-                'Sports': 'https://www.theguardian.com/uk/sport'
-            }
-        }
+# Mock functions since we don't have the actual model/data
+def count_parking_slots():
+    """Mock function to count available/occupied slots"""
+    total_slots = 100
+    occupied = random.randint(40, 70)
+    available = total_slots - occupied
+    return total_slots, available, occupied
 
-        for paper, categories in newspapers.items():
-            for category, url in categories.items():
-                yield scrapy.Request(url=url, callback=self.parse,
-                                   meta={'paper': paper, 'category': category})
+def predict_parking_status(image_path):
+    """Mock function to predict if a parking slot is occupied"""
+    # In a real app, this would use the actual model
+    img = image.load_img(image_path, target_size=(180, 180))
+    img_array = image.img_to_array(img)
+    img_array = np.expand_dims(img_array, axis=0)
+    # prediction = model.predict(img_array)
+    # return "Occupied" if prediction[0][0] > 0.5 else "Available"
+    return random.choice(["Available", "Occupied"])
 
-    def parse(self, response):
-        paper = response.meta['paper']
-        category = response.meta['category']
-
-        if paper == 'BBC':
-            articles = response.css('div.gs-c-promo')
-            for article in articles:
-                yield {
-                    'title': article.css('h3.gs-c-promo-heading__title::text').get(),
-                    'url': response.urljoin(article.css('a::attr(href)').get()),
-                    'summary': article.css('p.gs-c-promo-summary::text').get(),
-                    'paper': paper,
-                    'category': category,
-                    'scraped_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                }
-
-        elif paper == 'CNN':
-            articles = response.css('div.container__item')
-            for article in articles:
-                yield {
-                    'title': article.css('span.container__headline-text::text').get(),
-                    'url': response.urljoin(article.css('a::attr(href)').get()),
-                    'summary': article.css('div.container__description::text').get(),
-                    'paper': paper,
-                    'category': category,
-                    'scraped_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                }
-
-        elif paper == 'Reuters':
-            articles = response.css('article.story')
-            for article in articles:
-                yield {
-                    'title': article.css('h3.story-title a::text').get(),
-                    'url': response.urljoin(article.css('h3.story-title a::attr(href)').get()),
-                    'summary': article.css('p.story-excerpt::text').get(),
-                    'paper': paper,
-                    'category': category,
-                    'scraped_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                }
-
-        elif paper == 'Guardian':
-            articles = response.css('div.fc-item')
-            for article in articles:
-                yield {
-                    'title': article.css('a.js-headline-text::text').get(),
-                    'url': response.urljoin(article.css('a::attr(href)').get()),
-                    'summary': article.css('div.fc-item__standfirst::text').get(),
-                    'paper': paper,
-                    'category': category,
-                    'scraped_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                }
-
-def run_spider():
-    process = CrawlerProcess()
-    process.crawl(NewsSpider)
-    process.start()
-
-def load_data():
-    try:
-        df = pd.read_csv('news_articles.csv')
-        return df
-    except FileNotFoundError:
-        st.warning("No data found. Scraping news articles...")
-        run_spider()
-        return load_data()
-
-def preprocess_data(df):
-    # Clean data
-    df = df.dropna(subset=['title'])
-    df = df.drop_duplicates(subset=['title'])
-    
-    # Fill missing summaries with empty string
-    df['summary'] = df['summary'].fillna('')
-    
-    # Combine title and summary for clustering
-    df['text'] = df['title'] + ' ' + df['summary']
-    
-    return df
-
-def cluster_articles(df, n_clusters=5):
-    # Vectorize text using TF-IDF
-    vectorizer = TfidfVectorizer(stop_words='english', max_features=5000)
-    X = vectorizer.fit_transform(df['text'])
-    
-    # Cluster articles
-    kmeans = KMeans(n_clusters=n_clusters, random_state=42)
-    df['cluster'] = kmeans.fit_predict(X)
-    
-    # Reduce dimensions for visualization
-    pca = PCA(n_components=2)
-    reduced_features = pca.fit_transform(X.toarray())
-    
-    df['x'] = reduced_features[:, 0]
-    df['y'] = reduced_features[:, 1]
-    
-    return df, vectorizer, kmeans
-
-def plot_clusters(df):
-    fig = px.scatter(
-        df, 
-        x='x', 
-        y='y', 
-        color='cluster',
-        hover_data=['title', 'paper', 'category'],
-        title='News Article Clusters'
-    )
-    st.plotly_chart(fig)
-
-def display_cluster_details(df, selected_cluster):
-    cluster_df = df[df['cluster'] == selected_cluster]
-    
-    st.subheader(f"Cluster {selected_cluster} - {len(cluster_df)} Articles")
-    
-    # Display cluster summary
-    st.write("**Most common words:**")
-    
-    # Show articles in the cluster
-    st.write("**Articles in this cluster:**")
-    for idx, row in cluster_df.iterrows():
-        st.write(f"- [{row['title']}]({row['url']}) ({row['paper']}, {row['category']})")
+def generate_receipt(reservation_data):
+    """Generate a receipt for the reservation"""
+    receipt = f"""
+    PARKING RECEIPT
+    ----------------------------
+    Reservation ID: {reservation_data['reservation_id']}
+    Date: {reservation_data['date']}
+    Time: {reservation_data['time']}
+    ----------------------------
+    Customer Name: {reservation_data['name']}
+    Vehicle Number: {reservation_data['vehicle_number']}
+    Slot Number: {reservation_data['slot_number']}
+    Duration: {reservation_data['duration']} hours
+    ----------------------------
+    Amount Paid: ${reservation_data['amount']}
+    Payment Method: {reservation_data['payment_method']}
+    ----------------------------
+    Thank you for using our service!
+    """
+    return receipt
 
 def main():
-    st.title("News Article Clustering Dashboard")
+    st.title("🏢 Smart Parking Management System")
     
-    # Load and preprocess data
-    df = load_data()
-    df = preprocess_data(df)
+    # Sidebar navigation
+    menu = ["Parking Status", "Reserve a Slot", "Payment", "View Receipt"]
+    choice = st.sidebar.selectbox("Menu", menu)
     
-    # Sidebar controls
-    st.sidebar.header("Settings")
-    n_clusters = st.sidebar.slider("Number of clusters", 3, 10, 5)
+    # Parking status page
+    if choice == "Parking Status":
+        st.header("Current Parking Status")
+        
+        # Get parking counts (would use model in real implementation)
+        total, available, occupied = count_parking_slots()
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Total Slots", total)
+        with col2:
+            st.metric("Available", available, delta=f"{-occupied} occupied")
+        with col3:
+            st.metric("Occupied", occupied, delta=f"{available} available", delta_color="inverse")
+        
+        # Display a mock parking lot visualization
+        st.subheader("Parking Lot Overview")
+        fig, ax = plt.subplots(figsize=(10, 5))
+        status = ['Available', 'Occupied']
+        counts = [available, occupied]
+        ax.bar(status, counts, color=['green', 'red'])
+        ax.set_title('Parking Slot Status')
+        ax.set_ylabel('Number of Slots')
+        st.pyplot(fig)
+        
+        # Upload image for single spot detection (mock)
+        st.subheader("Check Specific Parking Spot")
+        uploaded_file = st.file_uploader("Upload an image of a parking spot", type=["jpg", "png", "jpeg"])
+        if uploaded_file is not None:
+            # Save the uploaded file temporarily
+            with open("temp_image.jpg", "wb") as f:
+                f.write(uploaded_file.getbuffer())
+            
+            # Display the image
+            st.image(uploaded_file, caption="Uploaded Parking Spot", width=300)
+            
+            # Predict status
+            status = predict_parking_status("temp_image.jpg")
+            st.write(f"Predicted Status: **{status}**")
+            
+            # Remove temp file
+            os.remove("temp_image.jpg")
     
-    # Cluster articles
-    df, vectorizer, kmeans = cluster_articles(df, n_clusters)
+    # Reservation page
+    elif choice == "Reserve a Slot":
+        st.header("Reserve a Parking Slot")
+        
+        # Get current parking status
+        total, available, _ = count_parking_slots()
+        
+        if available == 0:
+            st.warning("Sorry, no parking slots are currently available.")
+        else:
+            with st.form("reservation_form"):
+                st.write("Please fill in the reservation details:")
+                
+                name = st.text_input("Full Name")
+                vehicle_number = st.text_input("Vehicle Registration Number")
+                duration = st.selectbox("Duration (hours)", [1, 2, 3, 4, 5, 6, 8, 12, 24])
+                date = st.date_input("Date of Reservation", min_value=datetime.today())
+                time = st.time_input("Time of Arrival")
+                
+                # Generate a random slot number (in real app, would check availability)
+                slot_number = random.randint(1, total)
+                
+                submitted = st.form_submit_button("Check Availability")
+                
+                if submitted:
+                    if not name or not vehicle_number:
+                        st.error("Please fill in all required fields")
+                    else:
+                        # Calculate cost ($2 per hour)
+                        amount = duration * 2
+                        
+                        # Store reservation data in session state
+                        st.session_state.reservation_data = {
+                            "name": name,
+                            "vehicle_number": vehicle_number,
+                            "duration": duration,
+                            "date": date.strftime("%Y-%m-%d"),
+                            "time": str(time),
+                            "slot_number": slot_number,
+                            "amount": amount,
+                            "reservation_id": f"RES-{random.randint(1000, 9999)}"
+                        }
+                        
+                        st.success(f"Slot #{slot_number} is available for your selected time!")
+                        st.write(f"Estimated cost: ${amount}")
+                        st.info("Proceed to payment to confirm your reservation")
     
-    # Display clusters
-    st.header("Article Clusters Visualization")
-    plot_clusters(df)
+    # Payment page
+    elif choice == "Payment":
+        st.header("Payment Information")
+        
+        if 'reservation_data' not in st.session_state:
+            st.warning("Please make a reservation first")
+        else:
+            reservation = st.session_state.reservation_data
+            
+            st.write("Reservation Summary:")
+            st.write(f"- Slot Number: {reservation['slot_number']}")
+            st.write(f"- Date: {reservation['date']}")
+            st.write(f"- Time: {reservation['time']}")
+            st.write(f"- Duration: {reservation['duration']} hours")
+            st.write(f"- Total Amount: ${reservation['amount']}")
+            
+            with st.form("payment_form"):
+                st.write("Payment Details:")
+                
+                payment_method = st.selectbox("Payment Method", 
+                                            ["Credit Card", "Debit Card", "PayPal", "Mobile Payment"])
+                card_number = st.text_input("Card Number", disabled=payment_method in ["PayPal", "Mobile Payment"])
+                expiry = st.text_input("Expiry Date (MM/YY)", disabled=payment_method in ["PayPal", "Mobile Payment"])
+                cvv = st.text_input("CVV", disabled=payment_method in ["PayPal", "Mobile Payment"], type="password")
+                
+                pay_now = st.form_submit_button("Pay Now")
+                
+                if pay_now:
+                    if payment_method in ["Credit Card", "Debit Card"] and (not card_number or not expiry or not cvv):
+                        st.error("Please enter all card details")
+                    else:
+                        # Mock payment processing
+                        with st.spinner("Processing payment..."):
+                            time.sleep(2)
+                        
+                        # Add payment method to reservation data
+                        reservation['payment_method'] = payment_method
+                        st.session_state.reservation_data = reservation
+                        
+                        # Generate receipt
+                        st.session_state.receipt = generate_receipt(reservation)
+                        
+                        st.success("Payment successful! Your reservation is confirmed.")
+                        st.info("Go to 'View Receipt' to see and download your receipt")
     
-    # Cluster selection
-    st.header("Explore Clusters")
-    selected_cluster = st.selectbox("Select a cluster to explore", sorted(df['cluster'].unique()))
-    display_cluster_details(df, selected_cluster)
-    
-    # Show raw data
-    if st.checkbox("Show raw data"):
-        st.subheader("Raw Data")
-        st.write(df)
+    # Receipt page
+    elif choice == "View Receipt":
+        st.header("Your Parking Receipt")
+        
+        if 'receipt' not in st.session_state:
+            st.warning("No receipt available. Please complete a reservation and payment.")
+        else:
+            st.code(st.session_state.receipt)
+            
+            # Download button for receipt
+            st.download_button(
+                label="Download Receipt",
+                data=st.session_state.receipt,
+                file_name=f"parking_receipt_{st.session_state.reservation_data['reservation_id']}.txt",
+                mime="text/plain"
+            )
 
 if __name__ == "__main__":
     main()
